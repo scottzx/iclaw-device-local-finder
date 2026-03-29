@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # iClaw 本地设备发现脚本
-# 直接 curl 扫描 8080 端口，验证 openclaw 设备
+# 1. curl 扫描 8080 端口
+# 2. 调用 /api/deviceinfo 获取 hostname 和 serial
 #
 # 用法:
 #   ./scan.sh              # 自动检测本机 IP 并扫描
@@ -25,15 +26,19 @@ get_local_ip() {
 scan_ip() {
     local ip=$1
     local response
-    response=$(curl -s --connect-timeout 1 -m 2 "http://${ip}:8080/api/service/status" 2>/dev/null || echo "")
+    response=$(curl -s --connect-timeout 1 -m 2 "http://${ip}:8080/api/deviceinfo" 2>/dev/null || echo "")
 
     if [[ -n "$response" ]]; then
-        local port
-        port=$(echo "$response" | jq -r '.port // empty' 2>/dev/null || echo "")
-        if [[ "$port" == "18789" ]]; then
-            local hostname
-            hostname=$(echo "$response" | jq -r '.hostname // empty' 2>/dev/null || echo "$ip")
-            echo "{\"ip\":\"$ip\",\"hostname\":\"$hostname\",\"port\":$port}"
+        local serial
+        local hostname
+        local device_ip
+        serial=$(echo "$response" | jq -r '.serial // empty' 2>/dev/null || echo "")
+        hostname=$(echo "$response" | jq -r '.hostname // empty' 2>/dev/null || echo "")
+        device_ip=$(echo "$response" | jq -r '.ip // empty' 2>/dev/null || echo "")
+
+        if [[ -n "$serial" && "$serial" != "empty" ]]; then
+            # 构造 JSON（使用 serial 作为唯一标识）
+            echo "{\"ip\":\"$device_ip\",\"hostname\":\"$hostname\",\"serial\":\"$serial\"}"
         fi
     fi
 }

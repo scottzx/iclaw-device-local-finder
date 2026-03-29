@@ -2,16 +2,23 @@
 /**
  * iClaw 本地设备发现服务器
  * 提供 Web 界面展示扫描结果和收藏设备
+ * serial 作为唯一标识
  */
 
 import express from 'express';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, 'data');
+let dataDir = process.env.ICLAW_DEVICES_DIR || path.join(__dirname, 'data');
+// 处理 ~ 路径
+if (dataDir.startsWith('~/')) {
+    dataDir = path.join(os.homedir(), dataDir.slice(2));
+}
+const DATA_DIR = dataDir;
 const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
 const PORT = process.env.PORT || 3030;
 
@@ -35,6 +42,26 @@ function saveFavorites(favorites) {
     fs.writeFileSync(FAVORITES_FILE, JSON.stringify(favorites, null, 2));
 }
 
+// 更新收藏设备的 IP（如果 serial 匹配但 IP 变化）
+function updateFavoriteIP(serial, newIP) {
+    const favorites = loadFavorites();
+    let updated = false;
+
+    favorites.forEach(f => {
+        if (f.serial === serial && f.ip !== newIP) {
+            console.log(`Updating favorite ${serial} IP: ${f.ip} -> ${newIP}`);
+            f.ip = newIP;
+            updated = true;
+        }
+    });
+
+    if (updated) {
+        saveFavorites(favorites);
+    }
+
+    return updated;
+}
+
 const app = express();
 
 app.use(express.json());
@@ -49,21 +76,20 @@ app.get('/api/favorites', (req, res) => {
 
 // API: 添加收藏
 app.post('/api/favorites', (req, res) => {
-    const { mac, hostname, ip, openclaw_version } = req.body;
+    const { serial, hostname, ip } = req.body;
 
-    if (!mac) {
-        return res.status(400).json({ success: false, error: 'mac is required' });
+    if (!serial) {
+        return res.status(400).json({ success: false, error: 'serial is required' });
     }
 
     const favorites = loadFavorites();
-    const exists = favorites.find(f => f.mac === mac);
+    const exists = favorites.find(f => f.serial === serial);
 
     if (!exists) {
         favorites.push({
-            mac,
+            serial,
             hostname: hostname || ip,
             ip,
-            openclaw_version,
             addedAt: new Date().toISOString()
         });
         saveFavorites(favorites);
@@ -73,10 +99,10 @@ app.post('/api/favorites', (req, res) => {
 });
 
 // API: 移除收藏
-app.delete('/api/favorites/:mac', (req, res) => {
-    const { mac } = req.params;
+app.delete('/api/favorites/:serial', (req, res) => {
+    const { serial } = req.params;
     let favorites = loadFavorites();
-    favorites = favorites.filter(f => f.mac !== mac);
+    favorites = favorites.filter(f => f.serial !== serial);
     saveFavorites(favorites);
     res.json({ success: true, data: favorites });
 });
@@ -84,7 +110,7 @@ app.delete('/api/favorites/:mac', (req, res) => {
 // API: 执行扫描
 app.get('/api/scan', async (req, res) => {
     const scriptPath = path.join(__dirname, 'scan.sh');
-    const { subnet } = req.query; // 可选：指定网段
+    const { subnet } = req.query;
 
     if (!fs.existsSync(scriptPath)) {
         return res.status(500).json({ success: false, error: 'scan.sh not found' });
@@ -118,6 +144,13 @@ app.get('/api/scan', async (req, res) => {
         } catch (e) {
             // 空结果
         }
+
+        // 更新收藏设备的 IP（如果变化）
+        devices.forEach(device => {
+            if (device.serial) {
+                updateFavoriteIP(device.serial, device.ip);
+            }
+        });
 
         res.json({ success: true, data: devices });
     } catch (err) {

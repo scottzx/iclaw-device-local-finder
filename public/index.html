@@ -36,7 +36,7 @@
 
     <!-- 发现设备 -->
     <section class="section">
-      <h2 class="section-title">发现的设备</h2>
+      <h2 class="section-title">新发现的设备</h2>
       <div id="foundList" class="device-list">
         <div class="empty-state">点击「扫描」开始发现设备</div>
       </div>
@@ -60,8 +60,10 @@
         } else {
           section.style.display = 'none';
         }
+        return data;
       } catch (e) {
         console.error('Failed to load favorites:', e);
+        return [];
       }
     }
 
@@ -97,10 +99,17 @@
         progressFill.style.width = '100%';
         progressText.textContent = '完成';
 
-        if (data.length === 0) {
-          foundList.innerHTML = '<div class="empty-state">未发现 openclaw 设备</div>';
+        // 获取收藏列表用于过滤
+        const favorites = await loadFavorites();
+        const favoriteSerials = new Set(favorites.map(f => f.serial));
+
+        // 过滤掉已收藏的设备
+        const newDevices = data.filter(d => !favoriteSerials.has(d.serial));
+
+        if (newDevices.length === 0) {
+          foundList.innerHTML = '<div class="empty-state">没有发现新设备</div>';
         } else {
-          foundList.innerHTML = data.map(device => createDeviceCard(device, false)).join('');
+          foundList.innerHTML = newDevices.map(device => createDeviceCard(device, false)).join('');
         }
       } catch (e) {
         clearInterval(progInterval);
@@ -119,9 +128,9 @@
 
     // 创建设备卡片
     function createDeviceCard(device, isFavorite) {
-      const ip = device.scanned_ip || device.ip;
-      const hostname = device.hostname || device.ip;
-      const port = device.port || '';
+      const ip = device.ip;
+      const hostname = device.hostname || ip;
+      const serial = device.serial || '';
 
       return `
         <div class="device-card">
@@ -131,12 +140,12 @@
               <div class="card-name">${hostname}</div>
               <div class="card-meta">
                 <span>${ip}</span>
-                ${port ? `<span class="port">:${port}</span>` : ''}
+                ${serial ? `<span class="serial">${serial}</span>` : ''}
               </div>
             </div>
           </a>
           <button class="btn-favorite ${isFavorite ? 'active' : ''}"
-                  onclick="toggleFavorite(event, '${ip}')"
+                  onclick="toggleFavorite(event, '${serial}', '${hostname}', '${ip}', ${isFavorite})"
                   title="${isFavorite ? '取消收藏' : '添加收藏'}">
             ${isFavorite ? '★' : '☆'}
           </button>
@@ -145,22 +154,67 @@
     }
 
     // 切换收藏
-    async function toggleFavorite(event, ip) {
+    async function toggleFavorite(event, serial, hostname, ip, isFavorite) {
       event.preventDefault();
       event.stopPropagation();
 
-      try {
-        const res = await fetch(`${API}/favorites`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mac: ip, hostname: ip, ip: ip })
-        });
+      if (isFavorite) {
+        // 取消收藏，确认弹窗
+        if (!confirm(`确定取消收藏 "${hostname}" (${serial}) 吗？`)) {
+          return;
+        }
+        try {
+          const res = await fetch(`${API}/favorites/${encodeURIComponent(serial)}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            await loadFavorites();
+            // 重新加载设备列表
+            await reloadFoundDevices();
+          }
+        } catch (e) {
+          console.error('Failed to remove favorite:', e);
+        }
+      } else {
+        // 添加收藏
+        try {
+          const res = await fetch(`${API}/favorites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serial, hostname, ip })
+          });
+          if (res.ok) {
+            await loadFavorites();
+            // 重新加载设备列表
+            await reloadFoundDevices();
+          }
+        } catch (e) {
+          console.error('Failed to add favorite:', e);
+        }
+      }
+    }
 
-        if (res.ok) {
-          await loadFavorites();
+    // 重新加载发现的设备（过滤已收藏）
+    async function reloadFoundDevices() {
+      const foundList = document.getElementById('foundList');
+
+      try {
+        const subnet = document.getElementById('subnetInput').value.trim();
+        const url = subnet ? `${API}/scan?subnet=${encodeURIComponent(subnet)}` : `${API}/scan`;
+        const res = await fetch(url);
+        const { data } = await res.json();
+
+        const favorites = await loadFavorites();
+        const favoriteMACs = new Set(favorites.map(f => f.mac));
+        const newDevices = data.filter(d => !favoriteMACs.has(d.mac));
+
+        if (newDevices.length === 0) {
+          foundList.innerHTML = '<div class="empty-state">没有发现新设备</div>';
+        } else {
+          foundList.innerHTML = newDevices.map(device => createDeviceCard(device, false)).join('');
         }
       } catch (e) {
-        console.error('Failed to toggle favorite:', e);
+        console.error('Failed to reload found devices:', e);
       }
     }
 

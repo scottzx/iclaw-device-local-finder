@@ -270,6 +270,12 @@ h1 {
   font-weight: 500;
 }
 
+.card-meta .serial {
+  color: var(--text-tertiary);
+  font-family: 'SF Mono', monospace;
+  font-size: 12px;
+}
+
 /* ===== 收藏按钮 ===== */
 .btn-favorite {
   width: 44px;
