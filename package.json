@@ -1,0 +1,16 @@
+{
+  "name": "iclaw-device-local-finder",
+  "version": "1.0.0",
+  "description": "iClaw 本地设备发现工具",
+  "main": "server.js",
+  "type": "module",
+  "bin": {
+    "iclaw-device-finder": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

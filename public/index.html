@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iClaw 设备发现</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>iClaw 设备发现</h1>
+      <p class="subtitle">在局域网内发现 openclaw 设备</p>
+    </header>
+
+    <div class="actions">
+      <input type="text" id="subnetInput" class="subnet-input" placeholder="输入网段，如 10.100.70">
+      <button id="btnScan" class="btn btn-primary" onclick="startScan()">
+        <span class="btn-text">扫描</span>
+        <span class="btn-loading" style="display:none">扫描中...</span>
+      </button>
+    </div>
+
+    <div id="progress" class="progress" style="display:none">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">0%</div>
+    </div>
+
+    <!-- 收藏设备 -->
+    <section id="sectionFavorites" class="section" style="display:none">
+      <h2 class="section-title">收藏设备</h2>
+      <div id="favoritesList" class="device-list"></div>
+    </section>
+
+    <!-- 发现设备 -->
+    <section class="section">
+      <h2 class="section-title">发现的设备</h2>
+      <div id="foundList" class="device-list">
+        <div class="empty-state">点击「扫描」开始发现设备</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API = '/api';
+
+    // 加载收藏
+    async function loadFavorites() {
+      try {
+        const res = await fetch(`${API}/favorites`);
+        const { data } = await res.json();
+        const section = document.getElementById('sectionFavorites');
+        const list = document.getElementById('favoritesList');
+
+        if (data.length > 0) {
+          section.style.display = 'block';
+          list.innerHTML = data.map(device => createDeviceCard(device, true)).join('');
+        } else {
+          section.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Failed to load favorites:', e);
+      }
+    }
+
+    // 扫描
+    async function startScan() {
+      const btn = document.getElementById('btnScan');
+      const progress = document.getElementById('progress');
+      const progressFill = document.getElementById('progressFill');
+      const progressText = document.getElementById('progressText');
+      const foundList = document.getElementById('foundList');
+
+      btn.disabled = true;
+      btn.querySelector('.btn-text').style.display = 'none';
+      btn.querySelector('.btn-loading').style.display = 'inline';
+      progress.style.display = 'block';
+      foundList.innerHTML = '<div class="empty-state">正在扫描...</div>';
+
+      // 模拟进度
+      let prog = 0;
+      const progInterval = setInterval(() => {
+        prog = Math.min(prog + Math.random() * 15, 90);
+        progressFill.style.width = prog + '%';
+        progressText.textContent = Math.round(prog) + '%';
+      }, 300);
+
+      try {
+        const subnet = document.getElementById('subnetInput').value.trim();
+        const url = subnet ? `${API}/scan?subnet=${encodeURIComponent(subnet)}` : `${API}/scan`;
+        const res = await fetch(url);
+        const { data } = await res.json();
+
+        clearInterval(progInterval);
+        progressFill.style.width = '100%';
+        progressText.textContent = '完成';
+
+        if (data.length === 0) {
+          foundList.innerHTML = '<div class="empty-state">未发现 openclaw 设备</div>';
+        } else {
+          foundList.innerHTML = data.map(device => createDeviceCard(device, false)).join('');
+        }
+      } catch (e) {
+        clearInterval(progInterval);
+        foundList.innerHTML = '<div class="empty-state error">扫描失败: ' + e.message + '</div>';
+      } finally {
+        btn.disabled = false;
+        btn.querySelector('.btn-text').style.display = 'inline';
+        btn.querySelector('.btn-loading').style.display = 'none';
+
+        setTimeout(() => {
+          progress.style.display = 'none';
+          progressFill.style.width = '0%';
+        }, 1000);
+      }
+    }
+
+    // 创建设备卡片
+    function createDeviceCard(device, isFavorite) {
+      const ip = device.scanned_ip || device.ip;
+      const hostname = device.hostname || device.ip;
+      const port = device.port || '';
+
+      return `
+        <div class="device-card">
+          <a href="http://${ip}:8080" target="_blank" class="card-link">
+            <div class="card-icon">🖥</div>
+            <div class="card-info">
+              <div class="card-name">${hostname}</div>
+              <div class="card-meta">
+                <span>${ip}</span>
+                ${port ? `<span class="port">:${port}</span>` : ''}
+              </div>
+            </div>
+          </a>
+          <button class="btn-favorite ${isFavorite ? 'active' : ''}"
+                  onclick="toggleFavorite(event, '${ip}')"
+                  title="${isFavorite ? '取消收藏' : '添加收藏'}">
+            ${isFavorite ? '★' : '☆'}
+          </button>
+        </div>
+      `;
+    }
+
+    // 切换收藏
+    async function toggleFavorite(event, ip) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      try {
+        const res = await fetch(`${API}/favorites`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mac: ip, hostname: ip, ip: ip })
+        });
+
+        if (res.ok) {
+          await loadFavorites();
+        }
+      } catch (e) {
+        console.error('Failed to toggle favorite:', e);
+      }
+    }
+
+    // 初始化
+    function init() {
+      const params = new URLSearchParams(window.location.search);
+      const subnet = params.get('subnet');
+      if (subnet) {
+        document.getElementById('subnetInput').value = subnet;
+      }
+      loadFavorites();
+    }
+    init();
+  </script>
+</body>
+</html>
