@@ -99,17 +99,18 @@
         progressFill.style.width = '100%';
         progressText.textContent = '完成';
 
-        // 获取收藏列表用于过滤
+        // 获取收藏列表用于标记
         const favorites = await loadFavorites();
-        const favoriteSerials = new Set(favorites.map(f => f.serial));
+        const favoriteMap = new Map(favorites.map(f => [f.serial, f]));
 
-        // 过滤掉已收藏的设备
-        const newDevices = data.filter(d => !favoriteSerials.has(d.serial));
-
-        if (newDevices.length === 0) {
+        // 显示所有发现的设备，标记是否已收藏
+        if (data.length === 0) {
           foundList.innerHTML = '<div class="empty-state">没有发现新设备</div>';
         } else {
-          foundList.innerHTML = newDevices.map(device => createDeviceCard(device, false)).join('');
+          foundList.innerHTML = data.map(device => {
+            const isFavorited = favoriteMap.has(device.serial);
+            return createDeviceCard(device, isFavorited);
+          }).join('');
         }
       } catch (e) {
         clearInterval(progInterval);
