@@ -14,7 +14,11 @@ set -e
 # 获取本机 IP
 get_local_ip() {
     local ip
-    ip=$(hostname -I 2>/dev/null | awk '{print $1}' || ipconfig getifaddr en0 2>/dev/null || echo "")
+    # 优先使用 hostname -I，失败时 fallback 到 ipconfig
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    if [[ -z "$ip" ]]; then
+        ip=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "")
+    fi
     if [[ -z "$ip" ]]; then
         echo "Error: Cannot determine local IP" >&2
         exit 1
