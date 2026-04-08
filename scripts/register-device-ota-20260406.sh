@@ -33,7 +33,6 @@ fi
 
 # Step 2: Download and install the latest register-device.sh
 REGISTRY_HOST="${REGISTRY_HOST:-www.dreammate.work}"
-SCRIPT_URL="https://www.dreammate.work/scripts/register-device.sh"
 GITHUB_URL="https://raw.githubusercontent.com/scottzx/iclaw-device-local-finder/master/scripts/register-device.sh"
 TARGET_FILE="/usr/local/bin/register-device.sh"
 
@@ -45,26 +44,25 @@ if [[ -f "$TARGET_FILE" ]]; then
     log "Backed up old script"
 fi
 
-# Download new script — try GitHub directly since dreammate.work no longer hosts the script
+# Download new script from GitHub
 if curl -fsSL "$GITHUB_URL" -o "$TARGET_FILE"; then
-    chmod +x "$TARGET_FILE"
-    log "Updated register-device.sh from GitHub"
-else
-    # Fallback: try dreammate.work (may return HTML if domain expired)
-    log "Trying dreammate.work: $SCRIPT_URL"
-    if curl -fsSL "$SCRIPT_URL" -o "$TARGET_FILE"; then
-        # Verify it's actually a bash script, not HTML
-        if head -1 "$TARGET_FILE" | grep -q '^#!/'; then
-            chmod +x "$TARGET_FILE"
-            log "Updated register-device.sh from dreammate.work"
-        else
-            log "WARNING: dreammate.work returned HTML, not a script. Restoring backup."
-            mv "${TARGET_FILE}.bak.$(ls -t "${TARGET_FILE}.bak."* 2>/dev/null | head -1 | sed 's/.*\.bak\./bak\./')" "$TARGET_FILE" 2>/dev/null || true
-            log "WARNING: Could not download latest script, keeping existing"
-        fi
+    # Verify it's actually a bash script, not HTML
+    if head -1 "$TARGET_FILE" | grep -q '^#!/'; then
+        chmod +x "$TARGET_FILE"
+        log "Updated register-device.sh from GitHub"
     else
-        log "WARNING: Could not download latest script, keeping existing"
+        error "Downloaded file is not a bash script (HTML?), keeping existing"
+        # Restore backup
+        latest_bak=$(ls -t "${TARGET_FILE}.bak."* 2>/dev/null | head -1)
+        if [[ -n "$latest_bak" ]]; then
+            mv "$latest_bak" "$TARGET_FILE"
+            log "Restored from backup: $latest_bak"
+        fi
+        exit 1
     fi
+else
+    error "Failed to download register-device.sh from GitHub"
+    exit 1
 fi
 
 # Step 3: Verify installation
