@@ -34,7 +34,7 @@ fi
 # Step 2: Download and install the latest register-device.sh
 REGISTRY_HOST="${REGISTRY_HOST:-www.dreammate.work}"
 GITHUB_URL="https://raw.githubusercontent.com/scottzx/iclaw-device-local-finder/master/scripts/register-device.sh"
-TARGET_FILE="/usr/local/bin/register-device.sh"
+TARGET_FILE="/opt/iclaw/scripts/register-device.sh"
 
 log "Downloading latest register-device.sh..."
 
