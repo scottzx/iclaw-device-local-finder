@@ -5,7 +5,7 @@
 # Fix: Reset registration fail count that persists across reboots
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/scottzx/iclaw-manager/master/scripts/register-device-ota-20260406.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/scottzx/iclaw-device-local-finder/master/scripts/register-device-ota-20260406.sh | bash
 #
 
 set -euo pipefail
@@ -34,6 +34,7 @@ fi
 # Step 2: Download and install the latest register-device.sh
 REGISTRY_HOST="${REGISTRY_HOST:-www.dreammate.work}"
 SCRIPT_URL="https://www.dreammate.work/scripts/register-device.sh"
+GITHUB_URL="https://raw.githubusercontent.com/scottzx/iclaw-device-local-finder/master/scripts/register-device.sh"
 TARGET_FILE="/usr/local/bin/register-device.sh"
 
 log "Downloading latest register-device.sh..."
@@ -44,17 +45,23 @@ if [[ -f "$TARGET_FILE" ]]; then
     log "Backed up old script"
 fi
 
-# Download new script
-if curl -fsSL "$SCRIPT_URL" -o "$TARGET_FILE"; then
+# Download new script — try GitHub directly since dreammate.work no longer hosts the script
+if curl -fsSL "$GITHUB_URL" -o "$TARGET_FILE"; then
     chmod +x "$TARGET_FILE"
-    log "Updated register-device.sh successfully"
+    log "Updated register-device.sh from GitHub"
 else
-    # Fallback: try GitHub raw URL
-    GITHUB_URL="https://raw.githubusercontent.com/scottzx/iclaw-manager/master/scripts/register-device.sh"
-    log "Trying GitHub fallback: $GITHUB_URL"
-    if curl -fsSL "$GITHUB_URL" -o "$TARGET_FILE"; then
-        chmod +x "$TARGET_FILE"
-        log "Updated register-device.sh from GitHub"
+    # Fallback: try dreammate.work (may return HTML if domain expired)
+    log "Trying dreammate.work: $SCRIPT_URL"
+    if curl -fsSL "$SCRIPT_URL" -o "$TARGET_FILE"; then
+        # Verify it's actually a bash script, not HTML
+        if head -1 "$TARGET_FILE" | grep -q '^#!/'; then
+            chmod +x "$TARGET_FILE"
+            log "Updated register-device.sh from dreammate.work"
+        else
+            log "WARNING: dreammate.work returned HTML, not a script. Restoring backup."
+            mv "${TARGET_FILE}.bak.$(ls -t "${TARGET_FILE}.bak."* 2>/dev/null | head -1 | sed 's/.*\.bak\./bak\./')" "$TARGET_FILE" 2>/dev/null || true
+            log "WARNING: Could not download latest script, keeping existing"
+        fi
     else
         log "WARNING: Could not download latest script, keeping existing"
     fi
