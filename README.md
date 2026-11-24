@@ -20,11 +20,16 @@ npm start
 npx iclaw-device-local-finder
 ```
 
+## 设备注册中心（服务端）
+
+本仓库同时包含与 `scripts/register-device.sh` 配套的**服务端**，见 [`registry/`](registry/README.md)：设备把局域网 IP、序列号等上报到 `www.dreammate.work/api/register`，服务端落盘并提供 `device-registry?serial=xxx` 查询页。部署脚本、systemd 单元与 nginx 反代配置都在该目录下。
+
 ## 功能
 
 - 扫描本地网络中的设备
 - 收藏常用设备
 - Web 界面展示扫描结果
+- 设备自动上报局域网 IP（客户端脚本 + 服务端注册中心）
 
 ## API
 

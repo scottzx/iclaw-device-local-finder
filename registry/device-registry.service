@@ -1,0 +1,14 @@
+[Unit]
+Description=iClaw Device Registry
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/device-registry
+ExecStart=/usr/bin/python3 -I /opt/device-registry/server.py
+Restart=on-failure
+RestartSec=3
+Environment=PORT=1420
+
+[Install]
+WantedBy=multi-user.target
